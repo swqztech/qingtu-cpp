@@ -13,7 +13,7 @@ ImFont* g_font_title = nullptr;
 static std::string wide_path_to_utf8(const std::wstring& wpath) {
   const int u8len = WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, nullptr, 0, nullptr, nullptr);
   if (u8len <= 0) return {};
-  std::string path_u8(static_cast<size_t>(u8len), '\0');
+  std::string path_u8(static_cast<size_t>(u8len - 1), '\0');
   WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, path_u8.data(), u8len, nullptr, nullptr);
   return path_u8;
 }

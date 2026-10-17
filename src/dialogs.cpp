@@ -8,6 +8,14 @@
 
 namespace fs = std::filesystem;
 
+static void ensure_com() {
+  static bool done = false;
+  if (!done) {
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    done = true;
+  }
+}
+
 static std::string wide_to_utf8(const std::wstring& w) {
   if (w.empty()) return {};
   const int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
@@ -18,6 +26,7 @@ static std::string wide_to_utf8(const std::wstring& w) {
 }
 
 bool pick_image_files(std::vector<fs::path>& out) {
+  ensure_com();
   IFileOpenDialog* dlg = nullptr;
   if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dlg))))
     return false;
@@ -53,6 +62,7 @@ bool pick_image_files(std::vector<fs::path>& out) {
 }
 
 bool pick_output_folder(std::string& utf8_path) {
+  ensure_com();
   IFileOpenDialog* dlg = nullptr;
   if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dlg))))
     return false;

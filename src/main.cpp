@@ -7,7 +7,9 @@
 
 #include <d3d11.h>
 #include <shellapi.h>
+#include <filesystem>
 #include <tchar.h>
+#include <vector>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -49,9 +51,12 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       return 0;
     case WM_SIZE:
       if (wParam == SIZE_MINIMIZED) return 0;
-      g_resizeWidth = LOWORD(lParam);
-      g_resizeHeight = HIWORD(lParam);
+      g_resizeWidth = static_cast<UINT>(LOWORD(lParam));
+      g_resizeHeight = static_cast<UINT>(HIWORD(lParam));
       return 0;
+    case WM_SYSCOMMAND:
+      if ((wParam & 0xfff0) == SC_KEYMENU) return 0;
+      break;
     case WM_DESTROY:
       PostQuitMessage(0);
       return 0;
@@ -60,8 +65,8 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
-  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
   ImGui_ImplWin32_EnableDpiAwareness();
+
   static const HBRUSH k_dark = CreateSolidBrush(RGB(26, 38, 41));
   WNDCLASSEXW wc = {sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, hInstance, nullptr, nullptr, k_dark,
                     nullptr, L"QingtuCpp", nullptr};
@@ -79,17 +84,32 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.IniFilename = nullptr;
   const float dpi = EffectiveDpiScale(hwnd);
-  load_cjk_fonts(&io, 22.f * dpi, 34.f * dpi);
-  apply_qingtu_theme(dpi * 1.1f);
+  load_cjk_fonts(&io, 24.f * dpi, 36.f * dpi);
+  apply_qingtu_theme(dpi * 1.15f);
+
   ImGui_ImplWin32_Init(hwnd);
   ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
+  ImGui_ImplDX11_CreateDeviceObjects();
 
   AppState state;
   g_app = &state;
 
-  bool done = false;
+  // 首帧绘制完成后再显示，避免空白/闪屏
+  ImGui_ImplDX11_NewFrame();
+  ImGui_ImplWin32_NewFrame();
+  ImGui::NewFrame();
+  draw_ui(state);
+  ImGui::Render();
+  const float boot_clear[4] = {0.10f, 0.15f, 0.16f, 1.f};
+  PresentFrame(boot_clear, false);
+
   ShowWindow(hwnd, SW_SHOWDEFAULT);
+  UpdateWindow(hwnd);
+
+  bool done = false;
   while (!done) {
     MSG msg;
     while (PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
@@ -98,12 +118,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
       if (msg.message == WM_QUIT) done = true;
     }
     if (done) break;
-    if (g_resizeWidth && g_resizeHeight) {
+
+    if (g_resizeWidth > 0 && g_resizeHeight > 0) {
       CleanupRenderTarget();
       g_pSwapChain->ResizeBuffers(0, g_resizeWidth, g_resizeHeight, DXGI_FORMAT_UNKNOWN, 0);
       g_resizeWidth = g_resizeHeight = 0;
       CreateRenderTarget();
     }
+
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
@@ -113,13 +135,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     PresentFrame(clear, true);
   }
 
+  g_app = nullptr;
   ImGui_ImplDX11_Shutdown();
   ImGui_ImplWin32_Shutdown();
   ImGui::DestroyContext();
   CleanupDeviceD3D();
   DestroyWindow(hwnd);
   UnregisterClassW(wc.lpszClassName, wc.hInstance);
-  CoUninitialize();
   return 0;
 }
 
@@ -166,14 +188,23 @@ void CleanupRenderTarget() {
 }
 
 float EffectiveDpiScale(HWND hwnd) {
-  float s = ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd);
-  if (s <= 0.f) s = 1.f;
-  return s;
+  float scale = ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd);
+  if (scale <= 0.f) scale = 1.f;
+  const UINT dpi = GetDpiForWindow(hwnd);
+  if (dpi > 0) {
+    const float from_hwnd = static_cast<float>(dpi) / 96.f;
+    if (from_hwnd > scale) scale = from_hwnd;
+  }
+  if (scale < 1.f) scale = 1.f;
+  return scale;
 }
 
 void PresentFrame(const float clear_color[4], bool vsync) {
+  if (!g_mainRenderTargetView) return;
   g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
   g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color);
-  ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+  if (ImDrawData* dd = ImGui::GetDrawData()) {
+    if (dd->Valid) ImGui_ImplDX11_RenderDrawData(dd);
+  }
   g_pSwapChain->Present(vsync ? 1 : 0, 0);
 }

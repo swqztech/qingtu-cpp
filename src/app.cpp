@@ -82,16 +82,34 @@ void apply_qingtu_theme(float ui_scale) {
 }
 
 void draw_ui(AppState& state) {
-  ImGui::SetNextWindowPos(ImVec2(0, 0));
-  ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+  if (g_font_body) ImGui::PushFont(g_font_body);
+
+  const ImGuiViewport* vp = ImGui::GetMainViewport();
+  ImVec2 win_pos = vp->WorkPos;
+  ImVec2 win_size = vp->WorkSize;
+  if (win_size.x < 1.f || win_size.y < 1.f) {
+    win_size = ImGui::GetIO().DisplaySize;
+  }
+  if (win_size.x < 1.f || win_size.y < 1.f) {
+    win_pos = ImVec2(0, 0);
+    win_size = ImVec2(544.f, 680.f);
+  }
+  ImGui::SetNextWindowPos(win_pos);
+  ImGui::SetNextWindowSize(win_size);
   ImGui::Begin("qingtu", nullptr,
-               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+               ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                   ImGuiWindowFlags_NoTitleBar);
+
   if (g_font_title) ImGui::PushFont(g_font_title);
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.28f, 0.77f, 0.71f, 1.f));
   ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("轻图").x) * 0.5f);
-  ImGui::TextColored(ImVec4(0.28f, 0.77f, 0.71f, 1.f), "轻图");
+  ImGui::TextUnformatted("轻图");
+  ImGui::PopStyleColor();
   if (g_font_title) ImGui::PopFont();
-  ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("把体积压下去，细节留住").x) * 0.5f);
-  ImGui::TextDisabled("把体积压下去，细节留住");
+
+  const char* sub = "把体积压下去，细节留住";
+  ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(sub).x) * 0.5f);
+  ImGui::TextUnformatted(sub);
   ImGui::Spacing();
 
   if (ImGui::Button("压缩", ImVec2(72, 30))) state.tab = 0;
@@ -160,4 +178,6 @@ void draw_ui(AppState& state) {
     ImGui::EndChild();
   }
   ImGui::End();
+
+  if (g_font_body) ImGui::PopFont();
 }
